@@ -1,0 +1,13 @@
+echo "Build qsdcp/src/new-cpp ..." ;
+
+progs
+=
+	hello-import-std
+	std-stacktrace
+	std-stacktrace_entry
+;
+
+for prog in $(progs)
+{
+	exe $(prog) : $(prog).cpp ;
+}

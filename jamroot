@@ -1,0 +1,165 @@
+path-constant qsdcp-prj-root : . ;
+path-constant config-file : $(qsdcp-prj-root)/project-config.jam ;
+
+###########################################################################
+
+argv = [ modules.peek : ARGV ] ;
+
+if [ MATCH ^(cleanall)$ : $(argv) ]
+{
+	echo "cleanall ..." ;
+
+	cmd = "rm -rf `find $(qsdcp-prj-root) -name bin` `find $(qsdcp-prj-root) -name gcm.cache` `find . -name '*.o'` $(config-file)" ;
+	echo ;
+	echo $(cmd) ;
+	SHELL $(cmd) ;
+
+	echo ;
+	echo "Done!" ;
+	
+	exit ;
+}
+
+###########################################################################
+
+echo "====================" ;
+echo "Build qsdcp ..." ;
+echo "(Requires g++, at least gcc 16.0)" ;
+echo "====================" ;
+echo ;
+
+###########################################################################
+
+import path ;
+
+###########################################################################
+
+rule show-help ( )
+{
+	echo "[Help Menu]" ;
+	echo ;
+
+	echo "Build project:" ;
+	echo "b2 config <--gcc=path/to/g++> [--cxxstd=Number] ---- config" ;
+	echo "b2                                       ---- build" ;
+	echo ;
+	echo "For Example:" ;
+	echo ;
+	echo "b2 config --gcc=/bin/g++ --cxxstd=26" ;
+	echo "b2 -q -j7" ;
+	echo ;
+	echo "(Requires at least gcc 16.0)" ;
+}
+
+###########################################################################
+
+if [ MATCH ^(help)$ : $(argv) ]
+{
+	show-help ;
+	exit ;
+}
+
+###########################################################################
+
+if [ MATCH ^(config)$ : $(argv) ]
+{
+	gcc-cmd = [ option.get gcc ] ;
+
+	if ! $(gcc-cmd)
+	{
+		echo "ERROR: gcc (path to g++) command is not provided!" ;
+		echo "Run \"b2 help\" to read help." ;
+		exit ;
+	}
+
+	if ! [ path.exists $(gcc-cmd) ]
+	{
+		echo "ERROR: path to g++ command does not exist!" ;
+		exit ;
+	}
+
+	cxxstd-number = [ option.get cxxstd ] ;
+
+	if ! $(cxxstd-number)
+	{
+		cxxstd-number = 26 ;
+	}
+
+	SHELL ":>$(config-file)" ;
+
+	SHELL "echo 'using gcc : qsdcpcppcompiler : $(gcc-cmd) ;' >> $(config-file)" ;
+	SHELL "echo 'constant gcc : $(gcc-cmd) ;' >> $(config-file)" ;
+	SHELL "echo 'constant cxxstd : $(cxxstd-number) ;' >> $(config-file)" ;
+
+	echo "config done, run \"b2\" to build the project!" ;
+	exit ;
+}
+
+###########################################################################
+
+if ! [ path.exists $(config-file) ]
+{
+	echo "Run \"b2 help\" to read help." ;
+	exit ;
+}
+
+###########################################################################
+
+constant common-cxxflags : -fmodules-ts -std=c++$(cxxstd) ;
+
+# stdc++exp is required for std::stacktrace
+
+constant common-linkflags : -lstdc++exp ;
+
+###########################################################################
+
+std-gcm-cache = $(qsdcp-prj-root)/gcm.cache/std.gcm ;
+
+if ! [ path.exists $(std-gcm-cache) ]
+{
+	echo "Init std.gcm cache \"$(std-gcm-cache)\", please wait ..." ;
+	echo "                                                    ..." ;
+	echo "                                                    ..." ;
+	echo "                                                    ..." ;
+	echo "                                                    ..." ;
+	echo ;
+}
+else
+{
+	echo "std.gcm cache: \"$(std-gcm-cache)\" exists, continue ..." ;
+}
+
+make $(std-gcm-cache) : : @make-std-gcm-cache ;
+
+actions make-std-gcm-cache
+{
+	cd $(qsdcp-prj-root)
+	cmd="$(gcc) $(common-cxxflags) -fsearch-include-path bits/std.cc -c"
+	echo ${cmd}
+	${cmd}
+	rm ./std.o
+	echo "Great: std.gcm cache \"$(std-gcm-cache)\" is generated!"
+	echo
+	exit
+}
+
+
+# difference:
+#		$(std-gcm-cache) is a file path
+#		std-gcm is a b2 jamfile target
+
+alias std-gcm : $(std-gcm-cache) ;
+
+###########################################################################
+
+project
+:
+	requirements
+		<cxxflags>$(common-cxxflags)
+		<linkflags>$(common-linkflags)
+		<dependency>std-gcm
+;
+
+###########################################################################
+
+build-project src ;
